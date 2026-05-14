@@ -33,45 +33,7 @@ export function ReactionBar({
   depth = 0,
   maxDepth = 3,
 }: ReactionBarProps) {
-  const [showPicker, setShowPicker] = useState(false);
   const [expandedReaction, setExpandedReaction] = useState<string | null>(null);
-  const [pickerPlacement, setPickerPlacement] = useState<"above" | "below">("above");
-  const [pickerAlignment, setPickerAlignment] = useState<"start" | "end">("start");
-  const addWrapperRef = useRef<HTMLDivElement>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    if (!showPicker) return;
-
-    const updatePickerPosition = () => {
-      if (!addWrapperRef.current || !pickerRef.current) return;
-
-      const anchorRect = addWrapperRef.current.getBoundingClientRect();
-      const popoverRect = pickerRef.current.getBoundingClientRect();
-      const margin = 12;
-
-      const nextPlacement =
-        anchorRect.top - popoverRect.height >= margin ||
-        anchorRect.top >= window.innerHeight - anchorRect.bottom
-          ? "above"
-          : "below";
-
-      let nextAlignment: "start" | "end" = "start";
-      if (anchorRect.left + popoverRect.width > window.innerWidth - margin) {
-        nextAlignment = "end";
-      }
-
-      setPickerPlacement((prev) => (prev === nextPlacement ? prev : nextPlacement));
-      setPickerAlignment((prev) => (prev === nextAlignment ? prev : nextAlignment));
-    };
-
-    updatePickerPosition();
-    window.addEventListener("resize", updatePickerPosition);
-
-    return () => {
-      window.removeEventListener("resize", updatePickerPosition);
-    };
-  }, [showPicker]);
 
   if (reactions.length === 0 && depth > 0) return null;
 
@@ -153,61 +115,134 @@ export function ReactionBar({
             )}
 
             {depth < maxDepth && g.childReactions.length === 0 && (
-              <button
-                className="reaction-react-btn"
-                onClick={() => onAddReaction(g.reactionIds[0], "reaction", "❤️")}
-                title="React to this reaction"
-              >
-                +
-              </button>
+              <ReactionAddPicker
+                targetId={g.reactionIds[0]}
+                targetType="reaction"
+                onAddReaction={onAddReaction}
+                buttonClassName="reaction-react-btn"
+                buttonContent="+"
+                buttonTitle="React to this reaction"
+              />
             )}
           </div>
         ))}
 
         {/* Add reaction button */}
-        <div className="reaction-add-wrapper" ref={addWrapperRef}>
-          <button
-            className="reaction-add"
-            onClick={() => setShowPicker(!showPicker)}
-          >
-            <span>＋</span>
-          </button>
-
-          {showPicker && (
-            <div
-              ref={pickerRef}
-              className={`reaction-picker-popover ${pickerPlacement} ${pickerAlignment}`}
-            >
-              <div className="quick-reactions">
-                {quickReactions.map((emoji) => (
-                  <button
-                    key={emoji}
-                    className="quick-reaction-btn"
-                    onClick={() => {
-                      onAddReaction(targetId, targetType, emoji);
-                      setShowPicker(false);
-                    }}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-              <EmojiPicker
-                compact
-                onSelect={(emoji) => {
-                  onAddReaction(targetId, targetType, emoji);
-                  setShowPicker(false);
-                }}
-                onClose={() => setShowPicker(false)}
-              />
-            </div>
-          )}
-        </div>
+        <ReactionAddPicker
+          targetId={targetId}
+          targetType={targetType}
+          onAddReaction={onAddReaction}
+          buttonClassName="reaction-add"
+          buttonContent={<span>＋</span>}
+        />
       </div>
 
       {depth >= maxDepth && reactions.some((r) => r.childReactions.length > 0) && (
         <div className="reaction-depth-limit">
           <span className="reaction-depth-text">More reactions nested deeper...</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReactionAddPicker({
+  targetId,
+  targetType,
+  onAddReaction,
+  buttonClassName,
+  buttonContent,
+  buttonTitle,
+}: {
+  targetId: string;
+  targetType: "message" | "reaction";
+  onAddReaction: (targetId: string, targetType: "message" | "reaction", emoji: string) => void;
+  buttonClassName: string;
+  buttonContent: React.ReactNode;
+  buttonTitle?: string;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerPlacement, setPickerPlacement] = useState<"above" | "below">("above");
+  const [pickerAlignment, setPickerAlignment] = useState<"start" | "end">("start");
+  const addWrapperRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!showPicker) return;
+
+    const updatePickerPosition = () => {
+      if (!addWrapperRef.current || !pickerRef.current) return;
+
+      const anchorRect = addWrapperRef.current.getBoundingClientRect();
+      const popoverRect = pickerRef.current.getBoundingClientRect();
+      const container = addWrapperRef.current.closest('.message-list');
+      const containerRect = container 
+        ? container.getBoundingClientRect() 
+        : { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
+        
+      const margin = 12;
+
+      const fitsAbove = anchorRect.top - popoverRect.height >= containerRect.top + margin;
+      const fitsBelow = anchorRect.bottom + popoverRect.height <= containerRect.bottom - margin;
+
+      const nextPlacement = fitsAbove || (!fitsBelow && anchorRect.top - containerRect.top >= containerRect.bottom - anchorRect.bottom)
+          ? "above"
+          : "below";
+
+      let nextAlignment: "start" | "end" = "start";
+      if (anchorRect.left + popoverRect.width > containerRect.right - margin) {
+        nextAlignment = "end";
+      }
+
+      setPickerPlacement((prev) => (prev === nextPlacement ? prev : nextPlacement));
+      setPickerAlignment((prev) => (prev === nextAlignment ? prev : nextAlignment));
+    };
+
+    updatePickerPosition();
+    window.addEventListener("resize", updatePickerPosition);
+
+    return () => {
+      window.removeEventListener("resize", updatePickerPosition);
+    };
+  }, [showPicker]);
+
+  return (
+    <div className="reaction-add-wrapper" ref={addWrapperRef}>
+      <button
+        className={`${buttonClassName} ${showPicker ? "active" : ""}`}
+        onClick={() => setShowPicker(!showPicker)}
+        title={buttonTitle}
+      >
+        {buttonContent}
+      </button>
+
+      {showPicker && (
+        <div
+          ref={pickerRef}
+          className={`reaction-picker-popover ${pickerPlacement} ${pickerAlignment}`}
+        >
+          <div className="quick-reactions">
+            {quickReactions.map((emoji) => (
+              <button
+                key={emoji}
+                className="quick-reaction-btn"
+                onClick={() => {
+                  onAddReaction(targetId, targetType, emoji);
+                  setShowPicker(false);
+                }}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+          <EmojiPicker
+            compact
+            onSelect={(emoji) => {
+              onAddReaction(targetId, targetType, emoji);
+              setShowPicker(false);
+            }}
+            onClose={() => setShowPicker(false)}
+          />
         </div>
       )}
     </div>

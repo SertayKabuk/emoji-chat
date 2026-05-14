@@ -47,19 +47,25 @@ export function MessageBubble({
 
       const anchorRect = emojiWrapRef.current.getBoundingClientRect();
       const overlayRect = quickReactRef.current.getBoundingClientRect();
+      const container = emojiWrapRef.current.closest('.message-list');
+      const containerRect = container 
+        ? container.getBoundingClientRect() 
+        : { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
+      
       const margin = 12;
 
-      const nextPlacement =
-        anchorRect.top - overlayRect.height >= margin ||
-        anchorRect.top >= window.innerHeight - anchorRect.bottom
+      const fitsAbove = anchorRect.top - overlayRect.height >= containerRect.top + margin;
+      const fitsBelow = anchorRect.bottom + overlayRect.height <= containerRect.bottom - margin;
+
+      const nextPlacement = fitsAbove || (!fitsBelow && anchorRect.top - containerRect.top >= containerRect.bottom - anchorRect.bottom)
           ? "above"
           : "below";
 
       let nextAlignment: "center" | "start" | "end" = isOwn ? "end" : "center";
-      if (overlayRect.left < margin) {
-        nextAlignment = "start";
-      } else if (overlayRect.right > window.innerWidth - margin) {
+      if (anchorRect.left + (overlayRect.width / 2) > containerRect.right - margin) {
         nextAlignment = "end";
+      } else if (anchorRect.right - (overlayRect.width / 2) < containerRect.left + margin) {
+        nextAlignment = "start";
       }
 
       setQuickReactPlacement((prev) => (prev === nextPlacement ? prev : nextPlacement));
@@ -82,19 +88,25 @@ export function MessageBubble({
 
       const anchorRect = emojiWrapRef.current.getBoundingClientRect();
       const popoverRect = pickerRef.current.getBoundingClientRect();
+      const container = emojiWrapRef.current.closest('.message-list');
+      const containerRect = container 
+        ? container.getBoundingClientRect() 
+        : { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
+        
       const margin = 12;
 
-      const nextPlacement =
-        anchorRect.top - popoverRect.height >= margin ||
-        anchorRect.top >= window.innerHeight - anchorRect.bottom
+      const fitsAbove = anchorRect.top - popoverRect.height >= containerRect.top + margin;
+      const fitsBelow = anchorRect.bottom + popoverRect.height <= containerRect.bottom - margin;
+
+      const nextPlacement = fitsAbove || (!fitsBelow && anchorRect.top - containerRect.top >= containerRect.bottom - anchorRect.bottom)
           ? "above"
           : "below";
 
       let nextAlignment: "start" | "end" = isOwn ? "end" : "start";
-      if (anchorRect.left + popoverRect.width > window.innerWidth - margin) {
+      if (anchorRect.left + popoverRect.width > containerRect.right - margin) {
         nextAlignment = "end";
       }
-      if (anchorRect.right - popoverRect.width < margin) {
+      if (anchorRect.right - popoverRect.width < containerRect.left + margin) {
         nextAlignment = "start";
       }
 

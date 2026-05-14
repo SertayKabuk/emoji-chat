@@ -42,6 +42,7 @@ function AuthenticatedChatPage({
   const activeRoom = rooms.find((r) => r.id === activeRoomId);
 
   const [showCreate, setShowCreate] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     loadRooms();
@@ -74,17 +75,46 @@ function AuthenticatedChatPage({
             )}
           </div>
           <div className="chat-header-right">
-            <div className="connection-status">
-              <span className={`status-dot ${isConnected ? "online" : "offline"}`} />
-              <span className="status-text">{isConnected ? "Connected" : "Reconnecting..."}</span>
+            <div className="desktop-header-actions">
+              <div className="connection-status">
+                <span className={`status-dot ${isConnected ? "online" : "offline"}`} />
+                <span className="status-text">{isConnected ? "Connected" : "Reconnecting..."}</span>
+              </div>
+              <div className="user-menu">
+                <UserAvatar src={user.avatarUrl} name={user.displayName} size="sm" />
+                <span className="user-name">{user.displayName}</span>
+                <button className="btn-logout" onClick={onLogout}>Sign out</button>
+              </div>
             </div>
-            <div className="user-menu">
-              <UserAvatar src={user.avatarUrl} name={user.displayName} size="sm" />
-              <span className="user-name">{user.displayName}</span>
-              <button className="btn-logout" onClick={onLogout}>Sign out</button>
-            </div>
+            <button 
+              className="mobile-menu-btn" 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              title="Menu"
+            >
+              ☰
+            </button>
           </div>
         </header>
+
+        {isMobileMenuOpen && (
+          <div className="mobile-menu-dropdown">
+            <div className="mobile-menu-item">
+              <div className="connection-status">
+                <span className={`status-dot ${isConnected ? "online" : "offline"}`} />
+                <span className="status-text">{isConnected ? "Connected" : "Reconnecting..."}</span>
+              </div>
+            </div>
+            <div className="mobile-menu-item">
+              <div className="user-menu">
+                <UserAvatar src={user.avatarUrl} name={user.displayName} size="sm" />
+                <span className="user-name">{user.displayName}</span>
+              </div>
+            </div>
+            <div className="mobile-menu-item">
+              <button className="btn-logout w-full" onClick={onLogout}>Sign out</button>
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         {activeRoom ? (
