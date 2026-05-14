@@ -17,6 +17,10 @@ RUN dotnet publish "./api.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # Stage 3: Final image
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+
+# Install Kerberos library required by Npgsql
+RUN apt-get update && apt-get install -y libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY --from=api-build /app/publish .
 COPY --from=web-build /app/web/dist ./wwwroot
