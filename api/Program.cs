@@ -97,10 +97,9 @@ app.MapHub<ChatHub>("/hubs/chat");
 // Map Fallback to index.html for SPA routing
 app.MapFallbackToFile("index.html");
 
-// Auto-migrate in development
-if (app.Environment.IsDevelopment())
+// Auto-migrate on startup
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
 }
