@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { MessageDto } from "@/lib/api";
 import { UserAvatar } from "./UserAvatar";
 import { ReactionBar } from "./ReactionBar";
 import { quickReactions } from "@/lib/emojis";
+import { EmojiPicker } from "./EmojiPicker";
 
 interface MessageBubbleProps {
   message: MessageDto;
@@ -20,17 +21,110 @@ export function MessageBubble({
   isOwn,
 }: MessageBubbleProps) {
   const [showQuickReact, setShowQuickReact] = useState(false);
+  const [quickReactPlacement, setQuickReactPlacement] = useState<"above" | "below">("above");
+  const [quickReactAlignment, setQuickReactAlignment] = useState<"center" | "start" | "end">(
+    isOwn ? "end" : "center"
+  );
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerPlacement, setPickerPlacement] = useState<"above" | "below">("above");
+  const [pickerAlignment, setPickerAlignment] = useState<"start" | "end">(
+    isOwn ? "end" : "start"
+  );
+  const emojiWrapRef = useRef<HTMLDivElement>(null);
+  const quickReactRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
 
+  useLayoutEffect(() => {
+    if (!showQuickReact) return;
+
+    const updateQuickReactPosition = () => {
+      if (!emojiWrapRef.current || !quickReactRef.current) return;
+
+      const anchorRect = emojiWrapRef.current.getBoundingClientRect();
+      const overlayRect = quickReactRef.current.getBoundingClientRect();
+      const margin = 12;
+
+      const nextPlacement =
+        anchorRect.top - overlayRect.height >= margin ||
+        anchorRect.top >= window.innerHeight - anchorRect.bottom
+          ? "above"
+          : "below";
+
+      let nextAlignment: "center" | "start" | "end" = isOwn ? "end" : "center";
+      if (overlayRect.left < margin) {
+        nextAlignment = "start";
+      } else if (overlayRect.right > window.innerWidth - margin) {
+        nextAlignment = "end";
+      }
+
+      setQuickReactPlacement((prev) => (prev === nextPlacement ? prev : nextPlacement));
+      setQuickReactAlignment((prev) => (prev === nextAlignment ? prev : nextAlignment));
+    };
+
+    updateQuickReactPosition();
+    window.addEventListener("resize", updateQuickReactPosition);
+
+    return () => {
+      window.removeEventListener("resize", updateQuickReactPosition);
+    };
+  }, [isOwn, showQuickReact]);
+
+  useLayoutEffect(() => {
+    if (!showPicker) return;
+
+    const updatePickerPosition = () => {
+      if (!emojiWrapRef.current || !pickerRef.current) return;
+
+      const anchorRect = emojiWrapRef.current.getBoundingClientRect();
+      const popoverRect = pickerRef.current.getBoundingClientRect();
+      const margin = 12;
+
+      const nextPlacement =
+        anchorRect.top - popoverRect.height >= margin ||
+        anchorRect.top >= window.innerHeight - anchorRect.bottom
+          ? "above"
+          : "below";
+
+      let nextAlignment: "start" | "end" = isOwn ? "end" : "start";
+      if (anchorRect.left + popoverRect.width > window.innerWidth - margin) {
+        nextAlignment = "end";
+      }
+      if (anchorRect.right - popoverRect.width < margin) {
+        nextAlignment = "start";
+      }
+
+      setPickerPlacement((prev) => (prev === nextPlacement ? prev : nextPlacement));
+      setPickerAlignment((prev) => (prev === nextAlignment ? prev : nextAlignment));
+    };
+
+    updatePickerPosition();
+    window.addEventListener("resize", updatePickerPosition);
+
+    return () => {
+      window.removeEventListener("resize", updatePickerPosition);
+    };
+  }, [isOwn, showPicker]);
+
+  const closeHoverUi = () => {
+    setShowQuickReact(false);
+    setShowPicker(false);
+  };
+
+  const addReaction = (emoji: string) => {
+    onAddReaction(message.id, "message", emoji);
+    closeHoverUi();
+  };
+
   return (
     <div
       className={`message-bubble ${isOwn ? "own" : ""}`}
       onMouseEnter={() => setShowQuickReact(true)}
-      onMouseLeave={() => setShowQuickReact(false)}
+      onMouseLeave={closeHoverUi}
     >
       {!isOwn && (
         <div className="message-avatar">
@@ -47,21 +141,44 @@ export function MessageBubble({
           <div className="message-sender">{message.user.displayName}</div>
         )}
 
-        <div className="message-emoji-wrap">
+        <div className="message-emoji-wrap" ref={emojiWrapRef}>
           <span className="message-emoji">{message.emoji}</span>
 
           {/* Quick reaction overlay */}
           {showQuickReact && (
-            <div className="message-quick-react">
+            <div
+              ref={quickReactRef}
+              className={`message-quick-react ${quickReactPlacement} ${quickReactAlignment}`}
+            >
               {quickReactions.map((emoji) => (
                 <button
                   key={emoji}
                   className="quick-react-btn"
-                  onClick={() => onAddReaction(message.id, "message", emoji)}
+                  onClick={() => addReaction(emoji)}
                 >
                   {emoji}
                 </button>
               ))}
+              <button
+                className={`quick-react-btn quick-react-more ${showPicker ? "active" : ""}`}
+                onClick={() => setShowPicker((prev) => !prev)}
+                title="More reactions"
+              >
+                ＋
+              </button>
+            </div>
+          )}
+
+          {showPicker && (
+            <div
+              ref={pickerRef}
+              className={`message-picker-popover ${pickerPlacement} ${pickerAlignment}`}
+            >
+              <EmojiPicker
+                compact
+                onSelect={addReaction}
+                onClose={() => setShowPicker(false)}
+              />
             </div>
           )}
         </div>
@@ -69,7 +186,7 @@ export function MessageBubble({
         <div className="message-time">{time}</div>
 
         {/* Reactions */}
-        {(message.reactions.length > 0 || showQuickReact) && (
+        {message.reactions.length > 0 && (
           <ReactionBar
             reactions={message.reactions}
             targetId={message.id}

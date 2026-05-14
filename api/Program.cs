@@ -78,6 +78,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+
+// Serve static files from wwwroot
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -88,6 +93,9 @@ app.MapChatEndpoints();
 
 // Map SignalR hub
 app.MapHub<ChatHub>("/hubs/chat");
+
+// Map Fallback to index.html for SPA routing
+app.MapFallbackToFile("index.html");
 
 // Auto-migrate in development
 if (app.Environment.IsDevelopment())

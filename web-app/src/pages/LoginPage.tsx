@@ -6,12 +6,16 @@ import { useEffect } from "react";
 const floatingEmojis = ["😀", "❤️", "🎉", "🔥", "✨", "🌈", "🚀", "💬", "👋", "🎶", "🌟", "😎"];
 
 export function LoginPage() {
-  const { login, user } = useAuth();
+  const { login, user, isLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) navigate("/chat");
-  }, [user, navigate]);
+    if (!isLoading && user) {
+      navigate("/chat", { replace: true });
+    }
+  }, [isLoading, navigate, user]);
+
+  if (isLoading) return null;
 
   return (
     <div className="login-page">
@@ -45,7 +49,6 @@ export function LoginPage() {
             onSuccess={async (response) => {
               if (response.credential) {
                 await login(response.credential);
-                navigate("/chat");
               }
             }}
             onError={() => console.error("Google login failed")}

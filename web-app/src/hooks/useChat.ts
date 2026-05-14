@@ -1,11 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import * as signalR from "@microsoft/signalr";
 import { api, type MessageDto, type RoomDto } from "@/lib/api";
-import {
-  getConnection,
-  startConnection,
-  stopConnection,
-  resetConnection,
-} from "@/lib/signalr";
+import { createConnection } from "@/lib/signalr";
 
 interface MessagePayload {
   id: string;
@@ -36,6 +32,15 @@ export function useChat() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const prevRoomRef = useRef<string | null>(null);
+  const connectionRef = useRef<signalR.HubConnection | null>(null);
+
+  const getConnection = useCallback(() => {
+    if (!connectionRef.current) {
+      connectionRef.current = createConnection();
+    }
+
+    return connectionRef.current;
+  }, []);
 
   const setActiveRoomId = useCallback((id: string | null) => {
     _setActiveRoomId(id);
@@ -60,49 +65,60 @@ export function useChat() {
   // Connect to SignalR
   useEffect(() => {
     let mounted = true;
-    let retryTimeout: ReturnType<typeof setTimeout>;
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
+    const conn = getConnection();
+
+    const scheduleRetry = () => {
+      if (!mounted) return;
+
+      clearTimeout(retryTimeout);
+      retryTimeout = setTimeout(() => {
+        void connect();
+      }, 3000);
+    };
 
     const connect = async () => {
+      if (!mounted || conn.state !== signalR.HubConnectionState.Disconnected) {
+        return;
+      }
+
       try {
-        // Reset stale connection before retrying
-        const conn = getConnection();
-        if (conn.state === "Disconnected") {
-          await conn.start();
+        await conn.start();
+        if (mounted) {
           console.log("SignalR connected");
-          if (mounted) setIsConnected(true);
+          setIsConnected(true);
         }
       } catch (err) {
+        if (!mounted) return;
+
         console.error("SignalR connection failed, retrying in 3s...", err);
-        // Reset connection so a fresh one is created on retry
-        resetConnection();
-        if (mounted) {
-          setIsConnected(false);
-          retryTimeout = setTimeout(connect, 3000);
-        }
+        setIsConnected(false);
+        scheduleRetry();
       }
     };
 
-    connect();
-
-    // Track reconnection state
-    const conn = getConnection();
-    conn.onreconnecting(() => mounted && setIsConnected(false));
-    conn.onreconnected(() => mounted && setIsConnected(true));
-    conn.onclose(() => {
-      if (mounted) {
-        setIsConnected(false);
-        // Try to reconnect after close
-        resetConnection();
-        retryTimeout = setTimeout(connect, 3000);
-      }
+    conn.onreconnecting(() => {
+      if (mounted) setIsConnected(false);
     });
+    conn.onreconnected(() => {
+      if (mounted) setIsConnected(true);
+    });
+    conn.onclose(() => {
+      if (!mounted) return;
+
+      setIsConnected(false);
+      scheduleRetry();
+    });
+
+    void connect();
 
     return () => {
       mounted = false;
       clearTimeout(retryTimeout);
-      stopConnection();
+      connectionRef.current = null;
+      void conn.stop();
     };
-  }, []);
+  }, [getConnection]);
 
   // Set up message handlers
   useEffect(() => {
@@ -174,7 +190,7 @@ export function useChat() {
       conn.off("ReceiveReaction", onReceiveReaction);
       conn.off("ReactionRemoved", onReactionRemoved);
     };
-  }, [isConnected]);
+  }, [getConnection, isConnected]);
 
   // Join/leave room when active room changes
   useEffect(() => {
@@ -209,7 +225,7 @@ export function useChat() {
     }
 
     prevRoomRef.current = _activeRoomId;
-  }, [_activeRoomId, isConnected]);
+  }, [_activeRoomId, getConnection, isConnected]);
 
   // Load more messages (infinite scroll)
   const loadMoreMessages = useCallback(async () => {
@@ -227,11 +243,12 @@ export function useChat() {
   // Send emoji
   const sendEmoji = useCallback(
     async (emoji: string) => {
-      if (!_activeRoomId || !isConnected) return;
+      if (!_activeRoomId || !isConnected) return false;
       const conn = getConnection();
       await conn.invoke("SendEmoji", _activeRoomId, emoji);
+      return true;
     },
-    [_activeRoomId, isConnected]
+    [_activeRoomId, getConnection, isConnected]
   );
 
   // Add reaction
@@ -241,7 +258,7 @@ export function useChat() {
       const conn = getConnection();
       await conn.invoke("AddReaction", targetId, targetType, emoji);
     },
-    [isConnected]
+    [getConnection, isConnected]
   );
 
   // Remove reaction
@@ -251,7 +268,7 @@ export function useChat() {
       const conn = getConnection();
       await conn.invoke("RemoveReaction", reactionId);
     },
-    [isConnected]
+    [getConnection, isConnected]
   );
 
   // Create room

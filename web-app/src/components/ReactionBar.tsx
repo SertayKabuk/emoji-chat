@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactionDto } from "@/lib/api";
 import { quickReactions } from "@/lib/emojis";
 import { EmojiPicker } from "./EmojiPicker";
@@ -35,6 +35,43 @@ export function ReactionBar({
 }: ReactionBarProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [expandedReaction, setExpandedReaction] = useState<string | null>(null);
+  const [pickerPlacement, setPickerPlacement] = useState<"above" | "below">("above");
+  const [pickerAlignment, setPickerAlignment] = useState<"start" | "end">("start");
+  const addWrapperRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!showPicker) return;
+
+    const updatePickerPosition = () => {
+      if (!addWrapperRef.current || !pickerRef.current) return;
+
+      const anchorRect = addWrapperRef.current.getBoundingClientRect();
+      const popoverRect = pickerRef.current.getBoundingClientRect();
+      const margin = 12;
+
+      const nextPlacement =
+        anchorRect.top - popoverRect.height >= margin ||
+        anchorRect.top >= window.innerHeight - anchorRect.bottom
+          ? "above"
+          : "below";
+
+      let nextAlignment: "start" | "end" = "start";
+      if (anchorRect.left + popoverRect.width > window.innerWidth - margin) {
+        nextAlignment = "end";
+      }
+
+      setPickerPlacement((prev) => (prev === nextPlacement ? prev : nextPlacement));
+      setPickerAlignment((prev) => (prev === nextAlignment ? prev : nextAlignment));
+    };
+
+    updatePickerPosition();
+    window.addEventListener("resize", updatePickerPosition);
+
+    return () => {
+      window.removeEventListener("resize", updatePickerPosition);
+    };
+  }, [showPicker]);
 
   if (reactions.length === 0 && depth > 0) return null;
 
@@ -128,7 +165,7 @@ export function ReactionBar({
         ))}
 
         {/* Add reaction button */}
-        <div className="reaction-add-wrapper">
+        <div className="reaction-add-wrapper" ref={addWrapperRef}>
           <button
             className="reaction-add"
             onClick={() => setShowPicker(!showPicker)}
@@ -137,7 +174,10 @@ export function ReactionBar({
           </button>
 
           {showPicker && (
-            <div className="reaction-picker-popover">
+            <div
+              ref={pickerRef}
+              className={`reaction-picker-popover ${pickerPlacement} ${pickerAlignment}`}
+            >
               <div className="quick-reactions">
                 {quickReactions.map((emoji) => (
                   <button

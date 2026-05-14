@@ -5,7 +5,6 @@ import {
   type ReactNode,
 } from "react";
 import { api, type UserDto } from "@/lib/api";
-import { resetConnection } from "@/lib/signalr";
 import { AuthContext } from "./AuthContext";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -65,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     setIsLoading(false);
-    resetConnection();
   }, []);
 
   return (
